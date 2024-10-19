@@ -1,6 +1,7 @@
 """TP-Link api."""
 
 import logging
+import json
 from typing import Tuple
 
 from .classes import (
@@ -13,6 +14,7 @@ from .classes import (
     PortSpeed,
     PortState,
     TpLinkSystemInfo,
+    PortVLAN,
 )
 from .const import (
     FEATURE_POE,
@@ -22,6 +24,7 @@ from .const import (
     URL_POE_SETTINGS_SET,
     URL_PORT_SETTINGS_SET,
     URL_PORTS_SETTINGS_GET,
+    URL_VLAN_PORT_BASED_GET,
 )
 from .coreapi import TpLinkWebApi, VariableType
 from .utils import TpLinkFeaturesDetector
@@ -128,6 +131,59 @@ class TpLinkApi:
             firmware=get_value("firmwareStr"),
             hardware=get_value("hardwareStr"),
         )
+
+    async def get_port_vlan_info(self) -> list[PortVLAN]:
+        """Return the port states."""
+        data = await self._core_api.get_variable(
+            URL_VLAN_PORT_BASED_GET, "pvlan_ds", VariableType.Dict
+        )
+
+        result: list[PortVLAN] = []
+ 
+        enable =  data.get("state")
+        if not enable:
+            return result
+
+        port_num = data.get("portNum")
+        if not port_num:
+            return result
+
+        vids = data.get("vids")
+        if not vids:
+            return result
+
+        mbrs = data.get("mbrs")
+        if not mbrs:
+            return result
+        port_idx = 1
+        while port_idx <= port_num:
+            done = False
+            for (idx, vid) in enumerate(vids):
+                _LOGGER.error("get_port_vlan_info port=%s,idx=%s, vid=%s", port_idx, idx, vid)
+                mbr = mbrs[idx]
+                val = int(mbr) & (1 << (port_idx - 1))
+                _LOGGER.error("get_port_vlan_info port=%s, vlan=%s, mbr=%s, val=%s", port_idx, vid, mbr, val)
+
+                if val != 0:
+                    state = PortVLAN(
+                        vlanid=vid,
+                    )
+                    _LOGGER.error("get_port_vlan_info port_number=%s,vlan=%s", port_idx, vid)
+                    result.append(state)
+                    done = True
+                    break;
+
+            # if not, then the port belongs to default VLAN-1
+            if not done:
+                state = PortVLAN(
+                    vlanid=1,
+                )
+                _LOGGER.error("get_port_vlan_info port=%s,vlan=1", port_idx)
+                result.append(state)
+
+            port_idx += 1
+
+        return result
 
     async def get_port_states(self) -> list[PortState]:
         """Return the port states."""

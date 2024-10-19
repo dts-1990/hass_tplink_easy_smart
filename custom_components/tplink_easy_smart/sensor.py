@@ -33,6 +33,9 @@ _FUNCTION_UID_NETWORK_INFO: Final = "network_info"
 _FUNCTION_DISPLAYED_NAME_POE_INFO: Final = "PoE consumption"
 _FUNCTION_UID_POE_INFO: Final = "poe_consumption"
 
+_FUNCTION_DISPLAYED_NAME_PORT_VLAN_FORMAT: Final = "Port {} VLAN"
+_FUNCTION_UID_PORT_VLAN_FORMAT: Final = "port_{}vlan"
+
 ENTITY_DOMAIN: Final = "sensor"
 
 
@@ -63,7 +66,8 @@ async def async_setup_entry(
     """Set up sensors for TP-Link component."""
     coordinator: TpLinkDataUpdateCoordinator = get_coordinator(hass, config_entry)
 
-    sensors = [
+    sensors = []
+    sensors.append(
         TpLinkNetworkInfoSensor(
             coordinator,
             TpLinkSensorEntityDescription(
@@ -73,8 +77,25 @@ async def async_setup_entry(
                 function_uid=_FUNCTION_UID_NETWORK_INFO,
                 function_name=_FUNCTION_DISPLAYED_NAME_NETWORK_INFO,
             ),
-        ),
-    ]
+        )
+    )
+
+    for port_number in range(1, coordinator.ports_count + 1):
+        sensors.append(
+            TpLinkVLANInfoSensor(
+                port_number,
+                coordinator,
+                TpLinkSensorEntityDescription(
+                    key=f"port_{port_number}_vlan",
+                    icon="mdi:lan-pending",
+                    device_name=coordinator.get_switch_info().name,
+                    function_uid=_FUNCTION_UID_PORT_VLAN_FORMAT.format(port_number),
+                    function_name=_FUNCTION_DISPLAYED_NAME_PORT_VLAN_FORMAT.format(
+                        port_number
+                    ),
+                ),
+            )
+        )
 
     if await coordinator.is_feature_available(FEATURE_POE):
         sensors.append(
@@ -188,4 +209,38 @@ class TpLinkPoeInfoSensor(TpLinkSensor):
             self._attr_available = True
         else:
             self._attr_available = False
+        super()._handle_coordinator_update()
+
+
+# ---------------------------
+#   TpLinkVLANInfoSensor
+# ---------------------------
+class TpLinkVLANInfoSensor(TpLinkSensor):
+    entity_description: TpLinkDataUpdateCoordinator
+    _attr_native_value: float | None = None
+    _port_number: int | None = None
+    def __init__(
+        self,
+        port_number: int,
+        coordinator: TpLinkDataUpdateCoordinator,
+        description: TpLinkSensorEntityDescription,
+    ) -> None:
+        """Initialize."""
+        super().__init__(coordinator, description)
+        self._attr_native_value = None
+        self._attr_extra_state_attributes = {}
+        self._port_number = port_number
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        port_vlan = self.coordinator.get_port_vlan(self._port_number)
+        if port_vlan:
+            _LOGGER.error("TpLinkVLANInfoSensor _port_number=%s,vlan=%s", self._port_number, port_vlan.vlanid)
+
+            self._attr_native_value = port_vlan.vlanid
+            self._attr_available = True
+        else:
+            _LOGGER.error("TpLinkVLANInfoSensor _port_number=%s  NO VLAN", self._port_number)
+            self._attr_available = False
+
         super()._handle_coordinator_update()

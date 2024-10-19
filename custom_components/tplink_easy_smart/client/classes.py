@@ -145,3 +145,11 @@ class PoeState:
     power_limit_max: float
     power_consumption: float
     power_remain: float
+
+
+# ---------------------------
+#   PortVLAN
+# ---------------------------
+@dataclass
+class PortVLAN:
+    vlanid: int
