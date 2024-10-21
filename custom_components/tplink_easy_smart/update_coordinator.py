@@ -178,8 +178,8 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator):
             result = await self._api.get_port_vlan_info()
             self._ports_vlan = result[0]
             self._vlans = result[1]
-            _LOGGER.error("_update_port_vlan_info self._ports_vlan=%s", str(self._ports_vlan))
-            _LOGGER.error("_update_port_vlan_info self._vlans=%s", str(self._vlans))
+            _LOGGER.debug("_update_port_vlan_info self._ports_vlan=%s", str(self._ports_vlan))
+            _LOGGER.debug("_update_port_vlan_info self._vlans=%s", str(self._vlans))
         except Exception as ex:
             _LOGGER.warning("Can not get port VLAN: %s", repr(ex))
             self._ports_vlan = []
