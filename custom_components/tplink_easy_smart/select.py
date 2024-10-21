@@ -61,8 +61,6 @@ async def async_setup_entry(
     coordinator: TpLinkDataUpdateCoordinator = get_coordinator(hass, config_entry)
 
     selects = []
-    _LOGGER.error("SONTD select ports_count=%s", coordinator.ports_count)
-
     for port_number in range(1, coordinator.ports_count + 1):
         selects.append(
             TpLinkPortVlanSelect(
@@ -142,7 +140,6 @@ class TpLinkPortVlanSelect(TpLinkSelect):
     @property
     def current_option(self) -> str | None:
         vlanid = self.coordinator.get_port_vlan(self._port_number).vlanid
-        _LOGGER.error("SONTD current_option  port=%s; vlan=%s", self._port_number, vlanid)
         return 'VLAN-' + str(vlanid)
 
     @property
