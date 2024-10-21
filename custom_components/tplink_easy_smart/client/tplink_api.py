@@ -2,6 +2,8 @@
 
 import logging
 import json
+import math
+
 from typing import Tuple
 
 from .classes import (
@@ -15,6 +17,7 @@ from .classes import (
     PortState,
     TpLinkSystemInfo,
     PortVLAN,
+    VLAN,
 )
 from .const import (
     FEATURE_POE,
@@ -25,6 +28,7 @@ from .const import (
     URL_PORT_SETTINGS_SET,
     URL_PORTS_SETTINGS_GET,
     URL_VLAN_PORT_BASED_GET,
+    URL_VLAN_PORT_BASED_SET,
 )
 from .coreapi import TpLinkWebApi, VariableType
 from .utils import TpLinkFeaturesDetector
@@ -132,58 +136,70 @@ class TpLinkApi:
             hardware=get_value("hardwareStr"),
         )
 
-    async def get_port_vlan_info(self) -> list[PortVLAN]:
+    async def get_port_vlan_info(self) -> (list[PortVLAN], {int: VLAN}):
         """Return the port states."""
         data = await self._core_api.get_variable(
             URL_VLAN_PORT_BASED_GET, "pvlan_ds", VariableType.Dict
         )
 
-        result: list[PortVLAN] = []
- 
+        ports: list[PortVLAN] = []
+        vlans: {int: VLAN} = {}
+
         enable =  data.get("state")
         if not enable:
-            return result
+            return (ports, vlans)
 
         port_num = data.get("portNum")
         if not port_num:
-            return result
+            return (ports, vlans)
 
         vids = data.get("vids")
         if not vids:
-            return result
+            return (ports, vlans)
 
         mbrs = data.get("mbrs")
         if not mbrs:
-            return result
+            return (ports, vlans)
         port_idx = 1
         while port_idx <= port_num:
             done = False
             for (idx, vid) in enumerate(vids):
-                _LOGGER.error("get_port_vlan_info port=%s,idx=%s, vid=%s", port_idx, idx, vid)
                 mbr = mbrs[idx]
                 val = int(mbr) & (1 << (port_idx - 1))
-                _LOGGER.error("get_port_vlan_info port=%s, vlan=%s, mbr=%s, val=%s", port_idx, vid, mbr, val)
+                _LOGGER.debug("get_port_vlan_info port=%s, vlan=%s, mbr=%s, val=%s", port_idx, vid, mbr, val)
 
                 if val != 0:
-                    state = PortVLAN(
+                    port_vlan = PortVLAN(
                         vlanid=vid,
                     )
-                    _LOGGER.error("get_port_vlan_info port_number=%s,vlan=%s", port_idx, vid)
-                    result.append(state)
+                    _LOGGER.debug("get_port_vlan_info port_number=%s,vlan=%s", port_idx, vid)
+                    ports.append(port_vlan)
                     done = True
                     break;
 
             # if not, then the port belongs to default VLAN-1
             if not done:
-                state = PortVLAN(
+                port_vlan = PortVLAN(
                     vlanid=1,
                 )
-                _LOGGER.error("get_port_vlan_info port=%s,vlan=1", port_idx)
-                result.append(state)
+                _LOGGER.debug("get_port_vlan_info port=%s,vlan=1", port_idx)
+                ports.append(port_vlan)
 
             port_idx += 1
 
-        return result
+        for (idx, vid) in enumerate(vids):
+            mbr = mbrs[idx]
+            bits = int(max(8, math.log(mbr, 2)+1))
+            out = [1 if mbr & (1 << (bits-1-n)) else 0 for n in range(bits)]
+
+            vlan_ports = []
+            for (i, val) in enumerate(reversed(out)):
+                if val != 0: vlan_ports.append(i + 1)
+
+            vlan = VLAN(vid, vlan_ports)
+            vlans[vid] = vlan
+
+        return (ports, vlans)
 
     async def get_port_states(self) -> list[PortState]:
         """Return the port states."""
@@ -394,3 +410,32 @@ class TpLinkApi:
         }
         result = await self._core_api.post(URL_POE_PORT_SETTINGS_SET, data)
         _LOGGER.debug("POE_PORT_SETTINGS_SET_RESULT: %s", result)
+
+
+    async def set_vlan_ports(
+        self,
+        vlanid: int,
+        port_list: list,
+    ) -> None:
+        """Change ports VLAN."""
+        selPortsStr: string = '';
+        for port_number in port_list:
+            selPortsStr += f"selPorts={port_number}&"
+
+        query: str = (
+            f"vid={vlanid}&"
+            f"{selPortsStr}"
+            f"pvlan_add=Apply"
+        )
+        await self._core_api.get(URL_VLAN_PORT_BASED_SET, query=query)
+
+    async def del_vlan(
+        self,
+        vlanid: int,
+    ) -> None:
+        """Delete VLAN."""
+        query: str = (
+            f"selVlans={vlanid}&"
+            f"pvlan_del=Delete"
+        )
+        await self._core_api.get(URL_VLAN_PORT_BASED_SET, query=query)

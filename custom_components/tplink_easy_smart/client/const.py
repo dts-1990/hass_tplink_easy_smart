@@ -8,5 +8,6 @@ URL_VLAN_PORT_BASED_GET: Final = "VlanPortBasicRpm.htm"
 URL_PORT_SETTINGS_SET: Final = "port_setting.cgi"
 URL_POE_SETTINGS_SET: Final = "poe_global_config.cgi"
 URL_POE_PORT_SETTINGS_SET: Final = "poe_port_config.cgi"
+URL_VLAN_PORT_BASED_SET: Final = "pvlanSet.cgi"
 
 FEATURE_POE: Final = "feature_poe"

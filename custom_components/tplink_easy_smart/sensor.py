@@ -237,12 +237,11 @@ class TpLinkVLANInfoSensor(TpLinkSensor):
     def _handle_coordinator_update(self) -> None:
         port_vlan = self.coordinator.get_port_vlan(self._port_number)
         if port_vlan:
-            _LOGGER.error("TpLinkVLANInfoSensor _port_number=%s,vlan=%s", self._port_number, port_vlan.vlanid)
-
+            _LOGGER.debug("TpLinkVLANInfoSensor _port_number=%s,vlan=%s", self._port_number, port_vlan.vlanid)
             self._attr_native_value = port_vlan.vlanid
             self._attr_available = True
         else:
-            _LOGGER.error("TpLinkVLANInfoSensor _port_number=%s  NO VLAN", self._port_number)
+            _LOGGER.debug("TpLinkVLANInfoSensor _port_number=%s  NO VLAN", self._port_number)
             self._attr_available = False
 
         super()._handle_coordinator_update()

@@ -19,7 +19,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .client.classes import PoePowerLimit, PoePriority, TpLinkSystemInfo
 from .client.const import FEATURE_POE
-from .client.tplink_api import PoeState, PortPoeState, PortSpeed, PortState, TpLinkApi, PortVLAN
+from .client.tplink_api import PoeState, PortPoeState, PortSpeed, PortState, TpLinkApi, PortVLAN, VLAN
 from .const import ATTR_MANUFACTURER, DEFAULT_SCAN_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,7 +45,8 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator):
         self._port_states: list[PortState] = []
         self._port_poe_states: list[PortPoeState] = []
         self._poe_state: PoeState | None = None
-        self._port_vlan: list[PortVLAN] = []
+        self._ports_vlan: list[PortVLAN] = []
+        self._vlans: {int: [VLAN]} = {}
 
         update_interval = config_entry.options.get(
             CONF_SCAN_INTERVAL,
@@ -107,11 +108,9 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator):
 
     def get_port_vlan(self, number: int) -> PortVLAN | None:
         """Return the switch Port VLAN."""
-        _LOGGER.error("get_port_vlan self number=%s self.ports_poe_count=%s, self._port_vlan.len=%s", number, self.ports_count, len(self._port_vlan))
         if number > self.ports_count or number < 1:
             return None
-        return self._port_vlan[number - 1]
-
+        return self._ports_vlan[number - 1]
 
     def _safe_disconnect(self, api: TpLinkApi) -> None:
         """Disconnect from API."""
@@ -176,11 +175,15 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator):
     async def _update_port_vlan_info(self):
         """Update port VLAN states."""
         try:
-            self._port_vlan = await self._api.get_port_vlan_info()
-            _LOGGER.error("_update_port_vlan_info self._port_vlan size=%s", len(self._port_vlan))
+            result = await self._api.get_port_vlan_info()
+            self._ports_vlan = result[0]
+            self._vlans = result[1]
+            _LOGGER.error("_update_port_vlan_info self._ports_vlan=%s", str(self._ports_vlan))
+            _LOGGER.error("_update_port_vlan_info self._vlans=%s", str(self._vlans))
         except Exception as ex:
             _LOGGER.warning("Can not get port VLAN: %s", repr(ex))
-            self._port_vlan = []
+            self._ports_vlan = []
+            self._vlans = {}
 
     def get_device_info(self) -> DeviceInfo | None:
         """Return the DeviceInfo."""
@@ -235,3 +238,41 @@ class TpLinkDataUpdateCoordinator(DataUpdateCoordinator):
         )
         await self._update_port_poe_states()
         self.async_update_listeners()
+
+    async def async_set_port_vlan(self, port_id: int, vlan_name: str) ->  None:
+        """Return the switch Port VLAN."""
+        # Check if after changed, old VLAN has no member, then delete it (except VLAN-1)
+        del_action = False
+        mod_old_action = False
+
+        new_vlanid = int(vlan_name.removeprefix('VLAN-'))
+        old_vlanid = self._ports_vlan[port_id - 1].vlanid
+        old_vlan = self._vlans.get(old_vlanid)
+        if new_vlanid == 1 and old_vlanid != 1 and old_vlan != None and len(old_vlan.ports) == 1:  del_action = True
+        elif new_vlanid == 1: mod_old_action = True
+
+        new_vlan_ports: [int] = [port_id]
+        if del_action:
+            await self._api.del_vlan(
+                old_vlanid
+            )
+        elif mod_old_action:
+            old_vlan.ports.remove(port_id)
+            new_vlan = self._vlans.get(new_vlanid)
+            new_vlan_ports.extend(new_vlan.ports)
+            await self._api.set_vlan_ports(
+                old_vlanid, old_vlan.ports
+            )
+        else:
+            new_vlan = self._vlans.get(new_vlanid)
+            if new_vlan is None: self._vlans[new_vlanid] = VLAN(new_vlanid, new_vlan_ports)
+            else: new_vlan_ports.extend(new_vlan.ports)
+            await self._api.set_vlan_ports(
+                new_vlanid, new_vlan_ports
+            )
+
+        index = port_id - 1
+        if len(self._ports_vlan) >= index:
+            self._ports_vlan[index].vlanid = new_vlanid
+            self._vlans[new_vlanid].ports = new_vlan_ports
+            self.async_update_listeners()

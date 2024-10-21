@@ -153,3 +153,12 @@ class PoeState:
 @dataclass
 class PortVLAN:
     vlanid: int
+
+
+# ---------------------------
+#   PortVLAN
+# ---------------------------
+@dataclass
+class VLAN:
+    vlanid: int
+    ports: list[int]
