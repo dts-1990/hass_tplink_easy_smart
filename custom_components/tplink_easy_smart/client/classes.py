@@ -117,7 +117,8 @@ class PortState:
     flow_control_actual: bool
     speed_config: PortSpeed
     speed_actual: PortSpeed
-
+    port_based_vlanid: int
+    pvid_1q_vlanid: int
 
 # ---------------------------
 #   PortPoeState
@@ -148,17 +149,20 @@ class PoeState:
 
 
 # ---------------------------
-#   PortVLAN
+#   PortBasedVLAN
 # ---------------------------
 @dataclass
-class PortVLAN:
-    vlanid: int
-
-
-# ---------------------------
-#   PortVLAN
-# ---------------------------
-@dataclass
-class VLAN:
+class PortBasedVLAN:
     vlanid: int
     ports: list[int]
+
+
+# ---------------------------
+#   IEEE1QVLAN
+# ---------------------------
+@dataclass
+class IEEE1QVLAN:
+    vlanid: int
+    ungtag_ports: list[int]
+    tag_ports: list[int]
+    notmem_ports: list[int]

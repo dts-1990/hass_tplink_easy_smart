@@ -194,6 +194,10 @@ class TpLinkPortStateBinarySensor(TpLinkBinarySensor):
             self._attr_extra_state_attributes[
                 "speed_config"
             ] = DISPLAYED_PORT_SPEED.get(port_info.speed_config)
+            if port_info.port_based_vlanid:
+                self._attr_extra_state_attributes["current_vlan"] = 'VLAN-' + str(port_info.port_based_vlanid)
+            elif port_info.pvid_1q_vlanid:
+                self._attr_extra_state_attributes["current_vlan"] = 'VLAN-' + str(port_info.pvid_1q_vlanid)
         else:
             self._attr_available = False
             self._attr_is_on = None
